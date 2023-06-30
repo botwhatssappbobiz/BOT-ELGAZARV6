@@ -1,262 +1,204 @@
-
-require('./settings')
-const { default: ElgazarBotConnect, useSingleFileAuthState, DisconnectReason, fetchLatestBaileysVersion, generateForwardMessageContent, prepareWAMessageMedia, generateWAMessageFromContent, generateMessageID, downloadContentFromMessage, makeInMemoryStore, jidDecode, proto } = require("@adiwajshing/baileys")
-const { state, saveState } = useSingleFileAuthState(`${sessionName}.json`)
+require("./config.js")
+const { default: ChikuConnect, useSingleFileAuthState, DisconnectReason, fetchLatestBaileysVersion, generateForwardMessageContent, prepareWAMessageMedia, generateWAMessageFromContent, generateMessageID, downloadContentFromMessage, makeInMemoryStore, jidDecode, proto } = require("@adiwajshing/baileys")
+const { state, saveState } = useSingleFileAuthState(`./${sessionName}.json`)
 const pino = require('pino')
-const { Boom } = require('@hapi/boom')
 const fs = require('fs')
-const yargs = require('yargs/yargs')
 const chalk = require('chalk')
 const FileType = require('file-type')
 const path = require('path')
-const _ = require('lodash')
-const axios = require('axios')
+const CFonts = require('cfonts');
+const { exec, spawn, execSync } = require("child_process")
+const moment = require('moment-timezone')
 const PhoneNumber = require('awesome-phonenumber')
 const { imageToWebp, videoToWebp, writeExifImg, writeExifVid } = require('./lib/exif')
 const { smsg, isUrl, generateMessageTag, getBuffer, getSizeMedia, fetchJson, await, sleep } = require('./lib/myfunc')
-const { TelegraPh } = require('./lib/uploader')
-const moment = require('moment-timezone')
-const getRandom = (ext) => {
-	return `${Math.floor(Math.random() * 10000)}${ext}`
-}
-var low
-try {
-  low = require('lowdb')
-} catch (e) {
-  low = require('./lib/lowdb')
-}
-
-const { Low, JSONFile } = low
-const mongoDB = require('./lib/mongoDB')
-
-global.api = (name, path = '/', query = {}, apikeyqueryname) => (name in global.APIs ? global.APIs[name] : name) + path + (query || apikeyqueryname ? '?' + new URLSearchParams(Object.entries({ ...query, ...(apikeyqueryname ? { [apikeyqueryname]: global.APIKeys[name in global.APIs ? global.APIs[name] : name] } : {}) })) : '')
+const figlet = require('figlet')
+const { color } = require('./lib/color')
 
 const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) })
 
-global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse())
-global.db = new Low(
-  /https?:\/\//.test(opts['db'] || '') ?
-    new cloudDBAdapter(opts['db']) : /mongodb/.test(opts['db']) ?
-      new mongoDB(opts['db']) :
-      new JSONFile(`src/database.json`)
-)
-global.DATABASE = global.db
-global.loadDatabase = async function loadDatabase() {
-  if (global.db.READ) return new Promise((resolve) => setInterval(function () { (!global.db.READ ? (clearInterval(this), resolve(global.db.data == null ? global.loadDatabase() : global.db.data)) : null) }, 1 * 1000))
-  if (global.db.data !== null) return
-  global.db.READ = true
-  await global.db.read()
-  global.db.READ = false
-  global.db.data = {
-    users: {},
-    chats: {},
-    database: {},
-    game: {},
-    settings: {},
-    others: {},
-    sticker: {},
-    ...(global.db.data || {})
-  }
-  global.db.chain = _.chain(global.db.data)
-}
-loadDatabase()
+async function startChiku() {
+console.log(color(figlet.textSync('Chiku Bot', {
+		font: 'Pagga',
+		horizontalLayout: 'default',
+		vertivalLayout: 'default',
+	    width: 80,
+		whitespaceBreak: true
+        }), 'yellow'))
 
-process.on('uncaughtException', console.error)
+console.log(color('\nمرحبا ، أنا الجزار ، المطور الرئيسي لهذا البوت.\n\nشكرًا لاستخدام: ELGAZAR BOT','aqua'))
+console.log(color('\nافرح تم تشغيل البوت بنجاح✅'))
 
-// save database every 30seconds
-if (global.db) setInterval(async () => {
-    if (global.db.data) await global.db.write()
-  }, 30 * 1000)
-
-async function startElgazarBot() {
-    const ElgazarBot = ElgazarBotConnect({
+    let { version, isLatest } = await fetchLatestBaileysVersion()
+    const Chiku = ChikuConnect({
         logger: pino({ level: 'silent' }),
         printQRInTerminal: true,
-        browser: ['Cheems Bot MD','Safari','1.0.0'],
-        auth: state
+        browser: ['Chiku By: Kai','Safari','1.0.0'],
+        auth: state,
+        version
     })
-
-    store.bind(ElgazarBot.ev)
     
-    // anticall auto block
-    ElgazarBot.ws.on('CB:call', async (json) => {
+store.bind(Chiku.ev)
+
+    
+    Chiku.ws.on('CB:call', async (json) => {
     const callerId = json.content[0].attrs['call-creator']
     if (json.content[0].tag == 'offer') {
-    let blockxeon = await ElgazarBot.sendContact(callerId, global.owner)
-    ElgazarBot.sendMessage(callerId, { text: `*نظام الحظر التلقائي!*\n*لا تتصل بالبوت*!\n*تواصل مع المطور لالغاء حظرك✨ !*`}, { quoted : blockxeon })
+    let pa7rick = await Chiku.sendContact(callerId, global.owner)
+    Chiku.sendMessage(callerId, { text: `حبيبي! سيتم حظرك تلقائيا لاتصالك بي!`}, { quoted : pa7rick })
     await sleep(8000)
-    await ElgazarBot.updateBlockStatus(callerId, "block")
+    await Chiku.updateBlockStatus(callerId, "block")
     }
     })
 
-    ElgazarBot.ev.on('messages.upsert', async chatUpdate => {
-        //console.log(JSON.stringify(chatUpdate, undefined, 2))
-        try {
-        mek = chatUpdate.messages[0]
-        if (!mek.message) return
-        mek.message = (Object.keys(mek.message)[0] === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message
-        if (mek.key && mek.key.remoteJid === 'status@broadcast') return
-        if (!ElgazarBot.public && !mek.key.fromMe && chatUpdate.type === 'notify') return
-        if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return
-        m = smsg(ElgazarBot, mek, store)
-        require("./ElgazarBot-MD6")(ElgazarBot, m, chatUpdate, store)
-        } catch (e) {
-            console.log(e)
-        }
-    })
+Chiku.ev.on('messages.upsert', async chatUpdate => {
+try {
+mek = chatUpdate.messages[0]
+if (!mek.message) return
+mek.message = (Object.keys(mek.message)[0] === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message
+if (mek.key && mek.key.remoteJid === 'status@broadcast') return
+if (!Chiku.public && !mek.key.fromMe && chatUpdate.type === 'notify') return
+if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return
+m = smsg(Chiku, mek, store)
+require("./Elgazar")(Chiku, m, chatUpdate, store)
+} catch (err) {
+console.log(err)
+}
+})
+
+ /* 
+Chiku.ev.on('groups.update', async pea => {
     
-    // Group Update
-    ElgazarBot.ev.on('groups.update', async pea => {
-       //console.log(pea)
-    // Get Profile Picture Group
-       try {
-       ppgc = await ElgazarBot.profilePictureUrl(pea[0].id, 'image')
+       try {     
+       ppgc = await Chiku.profilePictureUrl(pea[0].id, 'image')
        } catch {
-       ppgc = 'https://i.ibb.co/RBx5SQC/avatar-group-large-v2.png'
+       ppgc = 'https://wallpapercave.com/wp/wp10524580.jpg'
        }
-       let lolXeon = { url : ppgc }
+       let wm_fatih = { url : ppgc }
        if (pea[0].announce == true) {
-       ElgazarBot.send5ButImg(pea[0].id, `「 Group Settings Changed 」\n\nThe Group Has Been Closed By Admin, Now Only Admin Can Send Messages !`, `${botname}`, lolXeon, [])
+       Chiku.send5ButImg(pea[0].id, `Grop has been *Closed!* Only *Admins* can send Messages!`, `${BotName}`, wm_fatih, [])
        } else if(pea[0].announce == false) {
-       ElgazarBot.send5ButImg(pea[0].id, `「 Group Settings Changed 」\n\nThe Group Has Been Opened By Admin, Now Participants Can Send Messages !`, `${botname}`, lolXeon, [])
-       } else if (pea[0].restrict == true) {
-       ElgazarBot.send5ButImg(pea[0].id, `「 Group Settings Changed 」\n\nGroup Info Has Been Restricted, Now Only Admin Can Edit Group Info !`, `${botname}`, lolXeon, [])
-       } else if (pea[0].restrict == false) {
-       ElgazarBot.send5ButImg(pea[0].id, `「 Group Settings Changed 」\n\nGroup Info Has Been Opened, Now Participants Can Edit Group Info !`, `${botname}`, lolXeon, [])
+       Chiku.send5ButImg(pea[0].id, `Grop has been *Opened!* Now *Everyone* can send Messages!`, `${BotName}`, wm_fatih, [])
        } else {
-       ElgazarBot.send5ButImg(pea[0].id, `「 Group Settings Changed 」\n\nGroup Subject Has Been Changed To *${pea[0].subject}*`, `${botname}`, lolXeon, [])
+       Chiku.send5ButImg(pea[0].id, `Group Subject has been updated to *${pea[0].subject}*`, `${BotName}`, wm_fatih, [])
      }
     })
-    
-    //randoming function
+*/
+
+    Chiku.ev.on('groups.update', async pea => {
+        //console.log(pea)
+     // Get Profile Picture Group
+        try {
+        ppgc = await Chiku.profilePictureUrl(pea[0].id, 'image')
+        } catch {
+        ppgc = 'https://images2.alphacoders.com/882/882819.jpg'
+        }
+        let wm_fatih = { url : ppgc }
+        if (pea[0].announce == true) {
+        //Chiku.send5ButImg(pea[0].id, `Grop has been *Closed!* Only *Admins* can send Messages!`, `Chiku Bot`, wm_fatih, [])
+
+        Chiku.sendMessage(m.chat, { image: wm_fatih, caption: 'تم اغلاق الجروب يمكن لادمن فقط ارسال الرسائل!'})
+        } else if(pea[0].announce == false) {
+       // Chiku.send5ButImg(pea[0].id, `Grop has been *Opened!* Now *Everyone* can send Messages!`, `Chiku Bot`, wm_fatih, [])
+       Chiku.sendMessage(m.chat, { image: wm_fatih, caption: 'تم فتح الجروب الان يمكن للجميع ارسال الرسائل!'})
+        } else if (pea[0].restrict == true) {
+        //Chiku.send5ButImg(pea[0].id, `Group Info modification has been *Restricted*, Now only *Admins* can edit Group Info !`, `Chiku Bot`, wm_fatih, [])
+        Chiku.sendMessage(m.chat, { image: wm_fatih, caption: 'تم تعديل معلومات الجرول يمكن الان لادمن فقط تعديل معلومات الجروب !'})
+        } else if (pea[0].restrict == false) {
+        //Chiku.send5ButImg(pea[0].id, `Group Info modification has been *Un-Restricted*, Now only *Everyone* can edit Group Info !`, `Chiku Bot`, wm_fatih, [])
+        Chiku.sendMessage(m.chat, { image: wm_fatih, caption: 'تم تعديل معلومات الجروب الآن يمكن للجميع  تعديل معلومات الجروب !'})
+        } else {
+        //Chiku.send5ButImg(pea[0].id, `Group Subject has been uhanged To:\n\n*${pea[0].subject}*`, `Chiku Bot`, wm_fatih, [])
+        Chikutextddfq =`تم تحديث اسم الجروب إلى:\n\n*${pea[0].subject}*`
+        Chiku.sendMessage(pea[0].id, { image: wm_fatih, caption: Chikutextddfq})
+      }
+     })
+
+
+
 function pickRandom(list) {
 return list[Math.floor(list.length * Math.random())]
 }
-//document randomizer
-let documents = [doc1,doc2,doc3,doc4,doc5,doc6]
-let docs = pickRandom(documents)
 
-    ElgazarBot.ev.on('group-participants.update', async (anu) => {
+
+
+Chiku.ev.on('group-participants.update', async (anu) => {
         console.log(anu)
+       
         try {
-            let metadata = await ElgazarBot.groupMetadata(anu.id)
+            let metadata = await Chiku.groupMetadata(anu.id)
             let participants = anu.participants
             for (let num of participants) {
-                // Get Profile Picture User
+  
                 try {
-                    ppuser = await ElgazarBot.profilePictureUrl(num, 'image')
+                    ppuser = await Chiku.profilePictureUrl(num, 'image')
                 } catch {
-                    ppuser = 'https://i.ibb.co/sbqvDMw/avatar-contact-large-v2.png'
+                    ppuser = 'https://telegra.ph/file/f1a719ad79f830231d984.jpg'
                 }
 
-                // Get Profile Picture Group
                 try {
-                    ppgroup = await zass.profilePictureUrl(anu.id, 'image')
+                    ppgroup = await Chiku.profilePictureUrl(anu.id, 'image')
                 } catch {
-                    ppgroup = 'https://i.ibb.co/RBx5SQC/avatar-group-large-v2.png'
+                    ppgroup = 'https://telegra.ph/file/f1a719ad79f830231d984.jpg'
                 }
-                
-                //welcome\\
-        let nama = await ElgazarBot.getName(num)
-memb = metadata.participants.length
-XeonWlcm = await getBuffer(ppuser)
-XeonLft = await getBuffer(ppuser)
+
+                let targetname = await Chiku.getName(num)
+                grpmembernum = metadata.participants.length
+
+            
                 if (anu.action == 'add') {
-                const xeonbuffer = await getBuffer(ppuser)
-                let xeonName = num
-                const xtime = moment.tz('Asia/Kolkata').format('HH:mm:ss')
-	            const xdate = moment.tz('Asia/Kolkata').format('DD/MM/YYYY')
-	            const xmembers = metadata.participants.length
-                let unicorndoc = {key: {fromMe: false,"participant":"0@s.whatsapp.net", "remoteJid": "916909137213-1604595598@g.us"}, "message": {orderMessage: {itemCount: 9999999,status: 200, thumbnail: XeonWlcm, surface: 200, message: `${metadata.subject}`, orderTitle: 'xeon', sellerJid: '0@s.whatsapp.net'}}, contextInfo: {"forwardingScore":999,"isForwarded":true},sendEphemeral: true}
-                xeonbody = `⋆ اهلا بيك يا..
- @${xeonName.split("@")[0]},
+                let WAuserName = num
+                Chikutext = `
+⋆ اهلا بيك يا..
+ @${WAuserName.split("@")[0]},
 ꔹ━━━━━ꔹ
 ⋆ نورت جروب..
 ${metadata.subject}.
 ꔹ━━━━━ꔹ
-⋆ عدد الاعضاء..
-${xmembers} عضو
+⋆ وهذا هو وصف الجروب..
+${metadata.desc}
 ꔹ━━━━━ꔹ
-⋆ وقت الخروج..
-${xtime} ${xdate}
-ꔹ━━━━━ꔹ
-⋆ من فضلك التزم بالقوانين..`
-let buttons = [
-{buttonId: `wkwwk`, buttonText: {displayText: 'نورت الجروب يحب♥✨'}, type: 1}
-]
-let buttonMessage = {
-document: fs.readFileSync('./XeonMedia/theme/cheems.xlsx'),
-mimetype: docs,
-jpegThumbnail:XeonWlcm,
-mentions: [num],
-fileName: `${metadata.subject}`,
-fileLength: 99999999999999,
-caption: xeonbody,
-footer: `${botname}`,
-buttons: buttons,
-headerType: 4,
-contextInfo:{externalAdReply:{
-title: `${ownername}`,
-body: `نورت الجروب يحب♥✨`,
-mediaType:2,
-thumbnail: XeonWlcm,
-sourceUrl: `${websitex}`,
-mediaUrl: `${websitex}`
-}}
-}
-ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
+⋆ من فضلك التزم بالقوانين..
+`
+
+    let buttonMessage = {
+    image: await getBuffer(ppuser),
+    mentions: [num],
+    caption: Chikutext,
+    footer: `${global.BotName}`,
+    headerType: 4,
+    }
+Chiku.sendMessage(anu.id, buttonMessage)
                 } else if (anu.action == 'remove') {
-                	const xeonbuffer = await getBuffer(ppuser)
-                    const xeontime = moment.tz('Asia/Kolkata').format('HH:mm:ss')
-	                const xeondate = moment.tz('Asia/Kolkata').format('DD/MM/YYYY')
-                	let xeonName = num
-                    const xeonmembers = metadata.participants.length
-                    let unicorndoc = {key: {fromMe: false,"participant":"0@s.whatsapp.net", "remoteJid": "916909137213-1604595598@g.us"}, "message": {orderMessage: {itemCount: 9999999,status: 200, thumbnail: xeonbuffer, surface: 200, message: `${metadata.subject}`, orderTitle: 'xeon', sellerJid: '0@s.whatsapp.net'}}, contextInfo: {"forwardingScore":999,"isForwarded":true},sendEphemeral: true}
-                    xeonbody = `⋆ مع السلامه 👋
-, @${xeonName.split("@")[0]}, 
+                	let WAuserName = num
+                    Chikutext = `
+⋆ مع السلامه 👋
+, @${WAuserName.split("@")[0]}, 
 ꔹ━━━━━ꔹ
 ⋆ حد يبقي في جروب قمر زي جروب
-${metadata.subject} ويغادر😂.
+${metadata.subject}.
 ꔹ━━━━━ꔹ
-⋆ عدد الاعضاء..
-${xeonmembers} عضو
-ꔹ━━━━━ꔹ
-⋆ وقت الخروج..
-${xeontime} ${xeondate}
-ꔹ━━━━━ꔹ`
-let buttons = [
-{buttonId: `wkwkwk`, buttonText: {displayText: 'مع السلامه تخرج يجي غيرك😉✨'}, type: 1}
-]
-let buttonMessage = {
-document: fs.readFileSync('./XeonMedia/theme/cheems.xlsx'),
-mimetype: docs,
-jpegThumbnail:XeonLft,
-mentions: [num],
-fileName: `${metadata.subject}`,
-fileLength: 99999999999999,
-caption: xeonbody,
-footer: `${botname}`,
-buttons: buttons,
-headerType: 4,
-contextInfo:{externalAdReply:{
-title: `${ownername}`,
-body: `مع السلامه تخرج يجي غيرك😉✨.`,
-mediaType:2,
-thumbnail: XeonLft,
-sourceUrl: `${websitex}`,
-mediaUrl: `${websitex}`
-}}
-}
-ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
-                             
-                }
+⋆ ويغادر يحمار يلا غور فداهيه..🖤😂
+
+`
+
+    let buttonMessage = {
+	image:await getBuffer(ppuser),
+    mentions: [num],
+    caption: Chikutext,
+    footer: `${global.BotName}`,
+    headerType: 4,
+    
+    }
+    Chiku.sendMessage(anu.id, buttonMessage)}}
+            } catch (err) {
+                console.log(err)
             }
-        } catch (e) {
-            console.log(e)
-        }
     })
-    // Setting
-    ElgazarBot.decodeJid = (jid) => {
+    
+
+
+    Chiku.decodeJid = (jid) => {
         if (!jid) return jid
         if (/:\d+@/gi.test(jid)) {
             let decode = jidDecode(jid) || {}
@@ -264,44 +206,45 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
         } else return jid
     }
     
-    ElgazarBot.ev.on('contacts.update', update => {
+    Chiku.ev.on('contacts.update', update => {
         for (let contact of update) {
-            let id = ElgazarBot.decodeJid(contact.id)
+            let id = Chiku.decodeJid(contact.id)
             if (store && store.contacts) store.contacts[id] = { id, name: contact.notify }
         }
     })
 
-    ElgazarBot.getName = (jid, withoutContact  = false) => {
-        id = ElgazarBot.decodeJid(jid)
-        withoutContact = ElgazarBot.withoutContact || withoutContact 
+    Chiku.getName = (jid, withoutContact  = false) => {
+        id = Chiku.decodeJid(jid)
+        withoutContact = Chiku.withoutContact || withoutContact 
         let v
         if (id.endsWith("@g.us")) return new Promise(async (resolve) => {
             v = store.contacts[id] || {}
-            if (!(v.name || v.subject)) v = ElgazarBot.groupMetadata(id) || {}
+            if (!(v.name || v.subject)) v = Chiku.groupMetadata(id) || {}
             resolve(v.name || v.subject || PhoneNumber('+' + id.replace('@s.whatsapp.net', '')).getNumber('international'))
         })
         else v = id === '0@s.whatsapp.net' ? {
             id,
             name: 'WhatsApp'
-        } : id === ElgazarBot.decodeJid(ElgazarBot.user.id) ?
-            ElgazarBot.user :
+        } : id === Chiku.decodeJid(Chiku.user.id) ?
+            Chiku.user :
             (store.contacts[id] || {})
             return (withoutContact ? '' : v.name) || v.subject || v.verifiedName || PhoneNumber('+' + jid.replace('@s.whatsapp.net', '')).getNumber('international')
     }
     
-        ElgazarBot.sendContact = async (jid, kon, quoted = '', opts = {}) => {
+    
+    Chiku.sendContact = async (jid, kon, quoted = '', opts = {}) => {
 	let list = []
 	for (let i of kon) {
 	    list.push({
-	    	displayName: await ElgazarBot.getName(i),
-	    	vcard: `BEGIN:VCARD\nVERSION:3.0\nN:${await ElgazarBot.getName(i)}\nFN:${await ElgazarBot.getName(i)}\nitem1.TEL;waid=${i}:${i}\nitem1.X-ABLabel:Click here to chat\nitem2.EMAIL;type=INTERNET:${ytname}\nitem2.X-ABLabel:YouTube\nitem3.URL:${socialm}\nitem3.X-ABLabel:GitHub\nitem4.ADR:;;${location};;;;\nitem4.X-ABLabel:Region\nEND:VCARD`
+	    	displayName: await Chiku.getName(i + '@s.whatsapp.net'),
+		vcard: `BEGIN:VCARD\nVERSION:3.0\nN:${await Chiku.getName(i + '@s.whatsapp.net')}\nFN:${global.OwnerName}\nitem1.TEL;waid=${i}:${i}\nitem1.X-ABLabel:Click here to chat\nitem2.EMAIL;type=INTERNET:${global.websitex}\nitem2.X-ABLabel:GitHub\nitem3.URL:${global.websitex}\nitem3.X-ABLabel:GitHub\nitem4.ADR:;;${global.location};;;;\nitem4.X-ABLabel:Region\nEND:VCARD`
 	    })
 	}
-	ElgazarBot.sendMessage(jid, { contacts: { displayName: `${list.length} Kontak`, contacts: list }, ...opts }, { quoted })
+	Chiku.sendMessage(jid, { contacts: { displayName: `${list.length} Contact`, contacts: list }, ...opts }, { quoted })
     }
     
-    ElgazarBot.setStatus = (status) => {
-        ElgazarBot.query({
+    Chiku.setStatus = (status) => {
+        Chiku.query({
             tag: 'iq',
             attrs: {
                 to: '@s.whatsapp.net',
@@ -317,101 +260,31 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
         return status
     }
 	
-    ElgazarBot.public = true
+    Chiku.public = true
 
-    ElgazarBot.serializeM = (m) => smsg(ElgazarBot, m, store)
+    Chiku.serializeM = (m) => smsg(Chiku, m, store)
 
-    ElgazarBot.ev.on('connection.update', async (update) => {
+    Chiku.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update	    
         if (connection === 'close') {
-        let reason = new Boom(lastDisconnect?.error)?.output.statusCode
-            if (reason === DisconnectReason.badSession) { console.log(`Bad Session File, Please Delete Session and Scan Again`); ElgazarBot.logout(); }
-            else if (reason === DisconnectReason.connectionClosed) { console.log("Connection closed, reconnecting...."); startElgazarBot(); }
-            else if (reason === DisconnectReason.connectionLost) { console.log("Connection Lost from Server, reconnecting..."); startElgazarBot(); }
-            else if (reason === DisconnectReason.connectionReplaced) { console.log("Connection Replaced, Another New Session Opened, Please Close Current Session First"); ElgazarBot.logout(); }
-            else if (reason === DisconnectReason.loggedOut) { console.log(`Device Logged Out, Please Scan Again And Run.`); ElgazarBot.logout(); }
-            else if (reason === DisconnectReason.restartRequired) { console.log("Restart Required, Restarting..."); startElgazarBot(); }
-            else if (reason === DisconnectReason.timedOut) { console.log("Connection TimedOut, Reconnecting..."); startElgazarBot(); }
-            else ElgazarBot.end(`Unknown DisconnectReason: ${reason}|${connection}`)
+        let reason = lastDisconnect.error ? lastDisconnect?.error?.output.statusCode : 0;
+            if (reason === DisconnectReason.badSession) { console.log(`ملف جلسة تالف ، يرجى حذف الجلسة والمسح مرة أخرى`); process.exit(); }
+            else if (reason === DisconnectReason.connectionClosed) { console.log("تم إغلاق الاتصال ، جاري إعادة الاتصال...."); startChiku(); }
+            else if (reason === DisconnectReason.connectionLost) { console.log("انقطع الاتصال من الخادم ، جاري إعادة الاتصال..."); startChiku(); }
+            else if (reason === DisconnectReason.connectionReplaced) { console.log("تم استبدال الاتصال ، وفتح جلسة جديدة أخرى ، يرجى إغلاق الجلسة الحالية أولاً"); process.exit(); }
+            else if (reason === DisconnectReason.loggedOut) { console.log(`تم تسجيل خروج الجهاز ، يرجى حذف الجلسة والمسح الضوئي مرة أخرى.`); process.exit(); }
+            else if (reason === DisconnectReason.restartRequired) { console.log("مطلوب إعادة التشغيل ، إعادة التشغيل..."); startChiku(); }
+            else if (reason === DisconnectReason.timedOut) { console.log("انتهى وقت الاتصال ، جاري إعادة الاتصال..."); startChiku(); }
+            else { console.log(`سبب قطع الاتصال غير معروف: ${reason}|${connection}`) }
         }
-        console.log('Connected...', update)
+        //console.log('Connected...', update)
     })
 
-    ElgazarBot.ev.on('creds.update', saveState)
+    Chiku.ev.on('creds.update', saveState)
 
-    // Add Other
 
-      /**
-      *
-      * @param {*} jid
-      * @param {*} url
-      * @param {*} caption
-      * @param {*} quoted
-      * @param {*} options
-      */
-     ElgazarBot.sendFileUrl = async (jid, url, caption, quoted, options = {}) => {
-      let mime = '';
-      let res = await axios.head(url)
-      mime = res.headers['content-type']
-      if (mime.split("/")[1] === "gif") {
-     return ElgazarBot.sendMessage(jid, { video: await getBuffer(url), caption: caption, gifPlayback: true, ...options}, { quoted: quoted, ...options})
-      }
-      let type = mime.split("/")[0]+"Message"
-      if(mime === "application/pdf"){
-     return ElgazarBot.sendMessage(jid, { document: await getBuffer(url), mimetype: 'application/pdf', caption: caption, ...options}, { quoted: quoted, ...options })
-      }
-      if(mime.split("/")[0] === "image"){
-     return ElgazarBot.sendMessage(jid, { image: await getBuffer(url), caption: caption, ...options}, { quoted: quoted, ...options})
-      }
-      if(mime.split("/")[0] === "video"){
-     return ElgazarBot.sendMessage(jid, { video: await getBuffer(url), caption: caption, mimetype: 'video/mp4', ...options}, { quoted: quoted, ...options })
-      }
-      if(mime.split("/")[0] === "audio"){
-     return ElgazarBot.sendMessage(jid, { audio: await getBuffer(url), caption: caption, mimetype: 'audio/mpeg', ...options}, { quoted: quoted, ...options })
-      }
-      }
-
-    /** Send List Messaage
-      *
-      *@param {*} jid
-      *@param {*} text
-      *@param {*} footer
-      *@param {*} title
-      *@param {*} butText
-      *@param [*] sections
-      *@param {*} quoted
-      */
-        ElgazarBot.sendListMsg = (jid, text = '', footer = '', title = '' , butText = '', sects = [], quoted) => {
-        let sections = sects
-        var listMes = {
-        text: text,
-        footer: footer,
-        title: title,
-        buttonText: butText,
-        sections
-        }
-        ElgazarBot.sendMessage(jid, listMes, { quoted: quoted })
-        }
-
-    /** Send Button 5 Message
-     * 
-     * @param {*} jid
-     * @param {*} text
-     * @param {*} footer
-     * @param {*} button
-     * @returns 
-     */
-        ElgazarBot.send5ButMsg = (jid, text = '' , footer = '', but = []) =>{
-        let templateButtons = but
-        var templateMessage = {
-        text: text,
-        footer: footer,
-        templateButtons: templateButtons
-        }
-        ElgazarBot.sendMessage(jid, templateMessage)
-        }
-
-    /** Send Button 5 Image
+   
+    /** Send Button 5 Images
      *
      * @param {*} jid
      * @param {*} text
@@ -421,9 +294,9 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} options
      * @returns
      */
-    ElgazarBot.send5ButImg = async (jid , text = '' , footer = '', img, but = [], options = {}) =>{
-        let message = await prepareWAMessageMedia({ image: img }, { upload: ElgazarBot.waUploadToServer })
-        var template = generateWAMessageFromContent(jid, proto.Message.fromObject({
+    Chiku.send5ButImg = async (jid , text = '' , footer = '', img, but = [], thumb, options = {}) =>{
+        let message = await prepareWAMessageMedia({ image: img, jpegThumbnail:thumb }, { upload: Chiku.waUploadToServer })
+        var template = generateWAMessageFromContent(m.chat, proto.Message.fromObject({
         templateMessage: {
         hydratedTemplate: {
         imageMessage: message.imageMessage,
@@ -433,57 +306,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
             }
             }
             }), options)
-            ElgazarBot.relayMessage(jid, template.message, { messageId: template.key.id })
-    }
-
-    /** Send Button 5 Video
-     *
-     * @param {*} jid
-     * @param {*} text
-     * @param {*} footer
-     * @param {*} Video
-     * @param [*] button
-     * @param {*} options
-     * @returns
-     */
-    ElgazarBot.send5ButVid = async (jid , text = '' , footer = '', vid, but = [], options = {}) =>{
-        let message = await prepareWAMessageMedia({ video: vid }, { upload: ElgazarBot.waUploadToServer })
-        var template = generateWAMessageFromContent(jid, proto.Message.fromObject({
-        templateMessage: {
-        hydratedTemplate: {
-        videoMessage: message.videoMessage,
-               "hydratedContentText": text,
-               "hydratedFooterText": footer,
-               "hydratedButtons": but
-            }
-            }
-            }), options)
-            ElgazarBot.relayMessage(jid, template.message, { messageId: template.key.id })
-    }
-
-    /** Send Button 5 Gif
-     *
-     * @param {*} jid
-     * @param {*} text
-     * @param {*} footer
-     * @param {*} Gif
-     * @param [*] button
-     * @param {*} options
-     * @returns
-     */
-    ElgazarBot.send5ButGif = async (jid , text = '' , footer = '', gif, but = [], options = {}) =>{
-        let message = await prepareWAMessageMedia({ video: gif, gifPlayback: true }, { upload: ElgazarBot.waUploadToServer })
-        var template = generateWAMessageFromContent(jid, proto.Message.fromObject({
-        templateMessage: {
-        hydratedTemplate: {
-        videoMessage: message.videoMessage,
-               "hydratedContentText": text,
-               "hydratedFooterText": footer,
-               "hydratedButtons": but
-            }
-            }
-            }), options)
-            ElgazarBot.relayMessage(jid, template.message, { messageId: template.key.id })
+            Chiku.relayMessage(jid, template.message, { messageId: template.key.id })
     }
 
     /**
@@ -495,7 +318,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} quoted 
      * @param {*} options 
      */
-    ElgazarBot.sendButtonText = (jid, buttons = [], text, footer, quoted = '', options = {}) => {
+    Chiku.sendButtonText = (jid, buttons = [], text, footer, quoted = '', options = {}) => {
         let buttonMessage = {
             text,
             footer,
@@ -503,7 +326,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
             headerType: 2,
             ...options
         }
-        ElgazarBot.sendMessage(jid, buttonMessage, { quoted, ...options })
+        Chiku.sendMessage(jid, buttonMessage, { quoted, ...options })
     }
     
     /**
@@ -514,7 +337,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} options 
      * @returns 
      */
-    ElgazarBot.sendText = (jid, text, quoted = '', options) => ElgazarBot.sendMessage(jid, { text: text, ...options }, { quoted })
+    Chiku.sendText = (jid, text, quoted = '', options) => Chiku.sendMessage(jid, { text: text, ...options }, { quoted })
 
     /**
      * 
@@ -525,9 +348,9 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} options 
      * @returns 
      */
-    ElgazarBot.sendImage = async (jid, path, caption = '', quoted = '', options) => {
+    Chiku.sendImage = async (jid, path, caption = '', quoted = '', options) => {
 	let buffer = Buffer.isBuffer(path) ? path : /^data:.*?\/.*?;base64,/i.test(path) ? Buffer.from(path.split`,`[1], 'base64') : /^https?:\/\//.test(path) ? await (await getBuffer(path)) : fs.existsSync(path) ? fs.readFileSync(path) : Buffer.alloc(0)
-        return await ElgazarBot.sendMessage(jid, { image: buffer, caption: caption, ...options }, { quoted })
+        return await Chiku.sendMessage(jid, { image: buffer, caption: caption, ...options }, { quoted })
     }
 
     /**
@@ -539,9 +362,9 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} options 
      * @returns 
      */
-    ElgazarBot.sendVideo = async (jid, path, caption = '', quoted = '', gif = false, options) => {
+    Chiku.sendVideo = async (jid, path, caption = '', quoted = '', gif = false, options) => {
         let buffer = Buffer.isBuffer(path) ? path : /^data:.*?\/.*?;base64,/i.test(path) ? Buffer.from(path.split`,`[1], 'base64') : /^https?:\/\//.test(path) ? await (await getBuffer(path)) : fs.existsSync(path) ? fs.readFileSync(path) : Buffer.alloc(0)
-        return await ElgazarBot.sendMessage(jid, { video: buffer, caption: caption, gifPlayback: gif, ...options }, { quoted })
+        return await Chiku.sendMessage(jid, { video: buffer, caption: caption, gifPlayback: gif, ...options }, { quoted })
     }
 
     /**
@@ -553,9 +376,9 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} options 
      * @returns 
      */
-    ElgazarBot.sendAudio = async (jid, path, quoted = '', ptt = false, options) => {
+    Chiku.sendAudio = async (jid, path, quoted = '', ptt = false, options) => {
         let buffer = Buffer.isBuffer(path) ? path : /^data:.*?\/.*?;base64,/i.test(path) ? Buffer.from(path.split`,`[1], 'base64') : /^https?:\/\//.test(path) ? await (await getBuffer(path)) : fs.existsSync(path) ? fs.readFileSync(path) : Buffer.alloc(0)
-        return await ElgazarBot.sendMessage(jid, { audio: buffer, ptt: ptt, ...options }, { quoted })
+        return await Chiku.sendMessage(jid, { audio: buffer, ptt: ptt, ...options }, { quoted })
     }
 
     /**
@@ -566,7 +389,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} options 
      * @returns 
      */
-    ElgazarBot.sendTextWithMentions = async (jid, text, quoted, options = {}) => ElgazarBot.sendMessage(jid, { text: text, contextInfo: { mentionedJid: [...text.matchAll(/@(\d{0,16})/g)].map(v => v[1] + '@s.whatsapp.net') }, ...options }, { quoted })
+    Chiku.sendTextWithMentions = async (jid, text, quoted, options = {}) => Chiku.sendMessage(jid, { text: text, contextInfo: { mentionedJid: [...text.matchAll(/@(\d{0,16})/g)].map(v => v[1] + '@s.whatsapp.net') }, ...options }, { quoted })
 
     /**
      * 
@@ -576,7 +399,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} options 
      * @returns 
      */
-    ElgazarBot.sendImageAsSticker = async (jid, path, quoted, options = {}) => {
+    Chiku.sendImageAsSticker = async (jid, path, quoted, options = {}) => {
         let buff = Buffer.isBuffer(path) ? path : /^data:.*?\/.*?;base64,/i.test(path) ? Buffer.from(path.split`,`[1], 'base64') : /^https?:\/\//.test(path) ? await (await getBuffer(path)) : fs.existsSync(path) ? fs.readFileSync(path) : Buffer.alloc(0)
         let buffer
         if (options && (options.packname || options.author)) {
@@ -585,7 +408,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
             buffer = await imageToWebp(buff)
         }
 
-        await ElgazarBot.sendMessage(jid, { sticker: { url: buffer }, ...options }, { quoted })
+        await Chiku.sendMessage(jid, { sticker: { url: buffer }, ...options }, { quoted })
         return buffer
     }
 
@@ -597,7 +420,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} options 
      * @returns 
      */
-    ElgazarBot.sendVideoAsSticker = async (jid, path, quoted, options = {}) => {
+    Chiku.sendVideoAsSticker = async (jid, path, quoted, options = {}) => {
         let buff = Buffer.isBuffer(path) ? path : /^data:.*?\/.*?;base64,/i.test(path) ? Buffer.from(path.split`,`[1], 'base64') : /^https?:\/\//.test(path) ? await (await getBuffer(path)) : fs.existsSync(path) ? fs.readFileSync(path) : Buffer.alloc(0)
         let buffer
         if (options && (options.packname || options.author)) {
@@ -606,57 +429,11 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
             buffer = await videoToWebp(buff)
         }
 
-        await ElgazarBot.sendMessage(jid, { sticker: { url: buffer }, ...options }, { quoted })
+        await Chiku.sendMessage(jid, { sticker: { url: buffer }, ...options }, { quoted })
         return buffer
     }
-	
-    /**
-     * 
-     * @param {*} message 
-     * @param {*} filename 
-     * @param {*} attachExtension 
-     * @returns 
-     */
-    ElgazarBot.downloadAndSaveMediaMessage = async (message, filename, attachExtension = true) => {
-        let quoted = message.msg ? message.msg : message
-        let mime = (message.msg || message).mimetype || ''
-        let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0]
-        const stream = await downloadContentFromMessage(quoted, messageType)
-        let buffer = Buffer.from([])
-        for await(const chunk of stream) {
-            buffer = Buffer.concat([buffer, chunk])
-        }
-	let type = await FileType.fromBuffer(buffer)
-        trueFileName = attachExtension ? (filename + '.' + type.ext) : filename
-        // save to file
-        await fs.writeFileSync(trueFileName, buffer)
-        return trueFileName
-    }
-
-    ElgazarBot.downloadMediaMessage = async (message) => {
-        let mime = (message.msg || message).mimetype || ''
-        let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0]
-        const stream = await downloadContentFromMessage(message, messageType)
-        let buffer = Buffer.from([])
-        for await(const chunk of stream) {
-            buffer = Buffer.concat([buffer, chunk])
-	}
-        
-	return buffer
-     } 
-    
-    /**
-     * 
-     * @param {*} jid 
-     * @param {*} path 
-     * @param {*} filename
-     * @param {*} caption
-     * @param {*} quoted 
-     * @param {*} options 
-     * @returns 
-     */
-    ElgazarBot.sendMedia = async (jid, path, fileName = '', caption = '', quoted = '', options = {}) => {
-        let types = await ElgazarBot.getFile(path, true)
+	Chiku.sendMedia = async (jid, path, fileName = '', caption = '', quoted = '', options = {}) => {
+        let types = await Chiku.getFile(path, true)
            let { mime, ext, res, data, filename } = types
            if (res && res.status !== 200 || file.length <= 65536) {
                try { throw { json: JSON.parse(file.toString()) } }
@@ -676,10 +453,44 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
        else if (/video/.test(mime)) type = 'video'
        else if (/audio/.test(mime)) type = 'audio'
        else type = 'document'
-       await ElgazarBot.sendMessage(jid, { [type]: { url: pathFile }, caption, mimetype, fileName, ...options }, { quoted, ...options })
+       await Chiku.sendMessage(jid, { [type]: { url: pathFile }, caption, mimetype, fileName, ...options }, { quoted, ...options })
        return fs.promises.unlink(pathFile)
        }
+    /**
+     * 
+     * @param {*} message 
+     * @param {*} filename 
+     * @param {*} attachExtension 
+     * @returns 
+     */
+    Chiku.downloadAndSaveMediaMessage = async (message, filename, attachExtension = true) => {
+        let quoted = message.msg ? message.msg : message
+        let mime = (message.msg || message).mimetype || ''
+        let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0]
+        const stream = await downloadContentFromMessage(quoted, messageType)
+        let buffer = Buffer.from([])
+        for await(const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk])
+        }
+	let type = await FileType.fromBuffer(buffer)
+        trueFileName = attachExtension ? (filename + '.' + type.ext) : filename
+        // save to file
+        await fs.writeFileSync(trueFileName, buffer)
+        return trueFileName
+    }
 
+    Chiku.downloadMediaMessage = async (message) => {
+        let mime = (message.msg || message).mimetype || ''
+        let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0]
+        const stream = await downloadContentFromMessage(message, messageType)
+        let buffer = Buffer.from([])
+        for await(const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk])
+	}
+        
+	return buffer
+     } 
+    
     /**
      * 
      * @param {*} jid 
@@ -688,7 +499,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} options 
      * @returns 
      */
-    ElgazarBot.copyNForward = async (jid, message, forceForward = false, options = {}) => {
+    Chiku.copyNForward = async (jid, message, forceForward = false, options = {}) => {
         let vtype
 		if (options.readViewOnce) {
 			message.message = message.message && message.message.ephemeralMessage && message.message.ephemeralMessage.message ? message.message.ephemeralMessage.message : (message.message || undefined)
@@ -719,11 +530,24 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
                 }
             } : {})
         } : {})
-        await ElgazarBot.relayMessage(jid, waMessage.message, { messageId:  waMessage.key.id })
+        await Chiku.relayMessage(jid, waMessage.message, { messageId:  waMessage.key.id })
         return waMessage
     }
 
-    ElgazarBot.cMod = (jid, copy, text = '', sender = ElgazarBot.user.id, options = {}) => {
+
+        Chiku.sendListMsg = (jid, text = '', footer = '', title = '' , butText = '', sects = [], quoted) => {
+        let sections = sects
+        var listMes = {
+        text: text,
+        footer: footer,
+        title: title,
+        buttonText: butText,
+        sections
+        }
+        Chiku.sendMessage(jid, listMes, { quoted: quoted })
+        }
+        
+    Chiku.cMod = (jid, copy, text = '', sender = Chiku.user.id, options = {}) => {
         //let copy = message.toJSON()
 		let mtype = Object.keys(copy.message)[0]
 		let isEphemeral = mtype === 'ephemeralMessage'
@@ -744,7 +568,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
 		if (copy.key.remoteJid.includes('@s.whatsapp.net')) sender = sender || copy.key.remoteJid
 		else if (copy.key.remoteJid.includes('@broadcast')) sender = sender || copy.key.remoteJid
 		copy.key.remoteJid = jid
-		copy.key.fromMe = sender === ElgazarBot.user.id
+		copy.key.fromMe = sender === Chiku.user.id
 
         return proto.WebMessageInfo.fromObject(copy)
     }
@@ -755,7 +579,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
      * @param {*} path 
      * @returns 
      */
-    ElgazarBot.getFile = async (PATH, save) => {
+    Chiku.getFile = async (PATH, save) => {
         let res
         let data = Buffer.isBuffer(PATH) ? PATH : /^data:.*?\/.*?;base64,/i.test(PATH) ? Buffer.from(PATH.split`,`[1], 'base64') : /^https?:\/\//.test(PATH) ? await (res = await getBuffer(PATH)) : fs.existsSync(PATH) ? (filename = PATH, fs.readFileSync(PATH)) : typeof PATH === 'string' ? PATH : Buffer.alloc(0)
         //if (!Buffer.isBuffer(data)) throw new TypeError('Result is not a buffer')
@@ -763,7 +587,7 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
             mime: 'application/octet-stream',
             ext: '.bin'
         }
-        filename = path.join(__filename, './src/' + new Date * 1 + '.' + type.ext)
+        filename = path.join(__filename, '../src/' + new Date * 1 + '.' + type.ext)
         if (data && save) fs.promises.writeFile(filename, data)
         return {
             res,
@@ -774,17 +598,81 @@ ElgazarBot.sendMessage(anu.id, buttonMessage, {quoted:unicorndoc})
         }
 
     }
+ 
+        Chiku.send5ButGif = async (jid , text = '' , footer = '', gif, but = [], options = {}) =>{
+        let message = await prepareWAMessageMedia({ video: gif, gifPlayback: true }, { upload: Chiku.waUploadToServer })
+        var template = generateWAMessageFromContent(jid, proto.Message.fromObject({
+        templateMessage: {
+        hydratedTemplate: {
+        videoMessage: message.videoMessage,
+               "hydratedContentText": text,
+               "hydratedFooterText": footer,
+               "hydratedButtons": but
+            }
+            }
+            }), options)
+            Chiku.relayMessage(jid, template.message, { messageId: template.key.id })
+    }
 
-    return ElgazarBot
+        Chiku.send5ButVid = async (jid , text = '' , footer = '', vid, but = [], options = {}) =>{
+        let message = await prepareWAMessageMedia({ video: vid }, { upload: Chiku.waUploadToServer })
+        var template = generateWAMessageFromContent(jid, proto.Message.fromObject({
+        templateMessage: {
+        hydratedTemplate: {
+        videoMessage: message.videoMessage,
+               "hydratedContentText": text,
+               "hydratedFooterText": footer,
+               "hydratedButtons": but
+            }
+            }
+            }), options)
+            Chiku.relayMessage(jid, template.message, { messageId: template.key.id })
+    }
+    //send5butmsg
+            Chiku.send5ButMsg = (jid, text = '' , footer = '', but = []) =>{
+        let templateButtons = but
+        var templateMessage = {
+        text: text,
+        footer: footer,
+        templateButtons: templateButtons
+        }
+        Chiku.sendMessage(jid, templateMessage)
+        }
+        
+    Chiku.sendFile = async(jid, PATH, fileName, quoted = {}, options = {}) => {
+        let types = await Chiku.getFile(PATH, true)
+        let { filename, size, ext, mime, data } = types
+        let type = '', mimetype = mime, pathFile = filename
+        if (options.asDocument) type = 'document'
+        if (options.asSticker || /webp/.test(mime)) {
+            let { writeExif } = require('./lib/sticker.js')
+            let media = { mimetype: mime, data }
+            pathFile = await writeExif(media, { packname: global.packname, author: global.packname, categories: options.categories ? options.categories : [] })
+            await fs.promises.unlink(filename)
+            type = 'sticker'
+            mimetype = 'image/webp'
+        }
+        else if (/image/.test(mime)) type = 'image'
+        else if (/video/.test(mime)) type = 'video'
+        else if (/audio/.test(mime)) type = 'audio'
+        else type = 'document'
+        await Chiku.sendMessage(jid, { [type]: { url: pathFile }, mimetype, fileName, ...options }, { quoted, ...options })
+        return fs.promises.unlink(pathFile)
+    }
+    Chiku.parseMention = async(text) => {
+        return [...text.matchAll(/@([0-9]{5,16}|0)/g)].map(v => v[1] + '@s.whatsapp.net')
+    }
+
+    return Chiku
 }
 
-startElgazarBot()
+startChiku()
 
 
 let file = require.resolve(__filename)
 fs.watchFile(file, () => {
 	fs.unwatchFile(file)
-	console.log(chalk.redBright(`Update ${__filename}`))
+	console.log(chalk.redBright(`${__filename} Updated`))
 	delete require.cache[file]
 	require(file)
 })
